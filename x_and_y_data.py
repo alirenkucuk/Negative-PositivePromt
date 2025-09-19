@@ -1,248 +1,159 @@
-# Project name: Negative Review Classifier
-# Goal: Classify movie reviews as negative or positive
-# File Name: x_and_y_data.py
-# Writer: Ali Eren Küçük
-# File Goal: Load the IMDB dataset, preprocess it, and save X and y to CSV files
-
+# File: x_and_y_data.py
+"""
+Simplified and cleaned preprocessing script for the IMDB dataset.
+- Removes unnecessary imports and unused code (no plotting, no matplotlib).
+- Keeps text cleaning focused: lowercasing, HTML unescape & tag removal, URL/email/punctuation removal,
+  optional number removal and minimum token length.
+- Saves raw and cleaned X/y and train/test splits to data/.
+"""
 import os
 import logging
+import re
+import html
+from typing import Optional
 
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 from sklearn.model_selection import train_test_split
 
-
-# -------------------------- Logging setup --------------------------
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# --- Logging ---
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-logger.info("All libraries imported successfully.")
-logger.info("Numpy version: %s", np.__version__)
-logger.info("Pandas version: %s", pd.__version__)
-logger.info("Matplotlib version: %s", mpl.__version__)
-logger.info("OS name: %s", os.name)
 
-
-def ensure_dir_exists(path):
-    """Ensure the parent directory for `path` exists.
-
-    Parameters
-    ----------
-    path : str
-        File path whose parent directory should exist (e.g. '/some/dir/file.csv').
-
-    Behavior
-    --------
-    - If the parent directory doesn't exist, it is created (recursive).
-    - Logs whether creation was needed or the directory already existed.
-
-    Notes
-    -----
-    This function is idempotent and safe to call before any file-writing operation.
-    """
-    directory = os.path.dirname(path)
-    if not directory:
-        logger.debug("No parent directory for path '%s' (file will be created in current directory).", path)
+def ensure_dir_exists(path: str) -> None:
+    """Ensure parent directory for `path` exists."""
+    parent = os.path.dirname(path)
+    if not parent:
         return
-
-    if not os.path.exists(directory):
-        os.makedirs(directory, exist_ok=True)
-        logger.info("Created directory: %s", directory)
-    else:
-        logger.debug("Directory already exists: %s", directory)
+    os.makedirs(parent, exist_ok=True)
 
 
-def load_csv_or_fail(path, expected_columns = None, nrows_preview = 5):
-    """Load a CSV file into a pandas DataFrame with helpful validation and logging.
-
-    Parameters
-    ----------
-    path : str
-        Path to the CSV file to load.
-    expected_columns : Optional[List[str]], optional
-        If provided, ensure these columns are present in the loaded DataFrame. Raises
-        ValueError if any are missing.
-    nrows_preview : int, optional
-        Number of rows to print as a preview in the logs.
-
-    Returns
-    -------
-    pd.DataFrame
-        The loaded DataFrame.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the file doesn't exist.
-    ValueError
-        If expected_columns is provided but some columns are missing.
-    """
+def load_csv_or_fail(path: str, expected_columns: Optional[list] = None) -> pd.DataFrame:
     if not os.path.isfile(path):
         logger.error("File not found: %s", path)
-        raise FileNotFoundError(f"File not found: {path}")
-
+        raise FileNotFoundError(path)
     df = pd.read_csv(path)
-    logger.info("Loaded CSV from %s with shape %s", path, df.shape)
-
     if expected_columns is not None:
         missing = [c for c in expected_columns if c not in df.columns]
         if missing:
-            logger.error("Missing expected columns: %s", missing)
             raise ValueError(f"Missing expected columns: {missing}")
-        logger.debug("All expected columns are present: %s", expected_columns)
-
-    # Log a small preview for quick debugging
-    logger.info("Data preview (first %d rows): %s", nrows_preview, df.head(nrows_preview).to_string(index=False))
-
+    logger.info("Loaded %s rows from %s", len(df), path)
     return df
 
 
-def save_series(series, path, column_name = None):
-    """Save a pandas Series to CSV as a single-column file.
+def clean_text(series: pd.Series,
+               lower: bool = True,
+               remove_html: bool = True,
+               remove_urls: bool = True,
+               remove_emails: bool = True,
+               remove_punct: bool = True,
+               remove_numbers: bool = False,
+               min_word_length: int = 3) -> pd.Series:
+    """Clean a pandas Series of text and return cleaned Series.
 
-    Parameters
-    ----------
-    series : pd.Series
-        The series to save. If unnamed, provide `column_name`.
-    path : str
-        Destination CSV path.
-    column_name : Optional[str]
-        Column name to use in the output CSV. If None, will use `series.name` or 'value'.
-
-    Behavior
-    --------
-    - Ensures parent directory exists.
-    - Resets the index and writes CSV without the index column.
-    - Logs the number of saved rows and the filepath.
+    Behavior:
+    - non-string entries become empty string
+    - optional HTML unescape + tag removal
+    - optional URL and email removal
+    - lowercase (default True)
+    - remove punctuation (keep a-z and 0-9)
+    - optional removal of pure numeric tokens
+    - remove short tokens shorter than min_word_length
     """
-    ensure_dir_exists(path)
 
-    col = column_name or series.name or 'value'
+    if not isinstance(series, pd.Series):
+        raise TypeError("clean_text expects a pandas Series")
+
+    url_re = re.compile(r"http\S+|www\.\S+")
+    email_re = re.compile(r"\S+@\S+")
+    html_tag_re = re.compile(r"<[^>]+>")
+    non_allowed_re = re.compile(r"[^a-z0-9\s]")
+    number_token_re = re.compile(r"\b\d+\b")
+
+    def _clean(doc: object) -> str:
+        if not isinstance(doc, str):
+            return ""
+        text = doc
+        if remove_html:
+            text = html.unescape(text)
+            text = html_tag_re.sub(' ', text)
+        if remove_urls:
+            text = url_re.sub(' ', text)
+        if remove_emails:
+            text = email_re.sub(' ', text)
+        if lower:
+            text = text.lower()
+        if remove_punct:
+            text = non_allowed_re.sub(' ', text)
+        if remove_numbers:
+            text = number_token_re.sub(' ', text)
+        # normalize whitespace
+        text = re.sub(r"\s+", " ", text).strip()
+        if not text:
+            return ""
+        tokens = [t for t in text.split() if len(t) >= (min_word_length or 0)]
+        return " ".join(tokens)
+
+    logger.info("Cleaning text series (%d rows)", len(series))
+    cleaned = series.fillna("").astype(str).map(_clean)
+    # show small sample
+    for i in range(min(3, len(series))):
+        logger.debug("BEFORE: %s", series.iloc[i])
+        logger.debug("AFTER : %s", cleaned.iloc[i])
+    return cleaned
+
+
+def save_series(series: pd.Series, path: str, column_name: Optional[str] = None) -> None:
+    ensure_dir_exists(path)
+    col = column_name or (series.name if series.name else 'value')
     df = pd.DataFrame({col: series.reset_index(drop=True)})
     df.to_csv(path, index=False)
-
-    logger.info("Saved Series to %s (column name: '%s', rows: %d)", path, col, len(df))
-
-
-def plot_class_distribution(y, show = True, save_path = None):
-    """Plot and optionally save the class distribution of a binary label series.
-
-    Parameters
-    ----------
-    y : pd.Series
-        Binary labels (e.g. 0/1). Non-binary values are aggregated by value.
-    show : bool
-        Whether to call plt.show() after plotting.
-    save_path : Optional[str]
-        If provided, the plot will be saved to this filepath (parent folder created if needed).
-    """
-    counts = y.value_counts().sort_index()
-    logger.info("Class counts: %s", counts.to_dict())
-
-    ax = counts.plot(kind='bar')
-    plt.title('Class Distribution')
-    plt.xlabel('Label')
-    plt.ylabel('Count')
-    plt.tight_layout()
-
-    if save_path:
-        ensure_dir_exists(save_path)
-        plt.savefig(save_path)
-        logger.info("Saved class distribution plot to %s", save_path)
-
-    if show:
-        plt.show()
-    else:
-        plt.close()
+    logger.info("Saved %s (rows=%d)", path, len(df))
 
 
-def create_train_test_split(X, y, test_size = 0.2, random_state = 1234, stratify = True):
-    """Create a train/test split for feature and label series with checks and logging.
-
-    Parameters
-    ----------
-    X : pd.Series
-        Feature series (text reviews).
-    y : pd.Series
-        Label series (binary labels compatible with sklearn).
-    test_size : float
-        Fraction of the dataset to reserve for testing (0 < test_size < 1).
-    random_state : int
-        RNG seed passed to sklearn's train_test_split.
-    stratify : bool
-        Whether to stratify the split using `y` to preserve class balance.
-
-    Returns
-    -------
-    Tuple[pd.Series, pd.Series, pd.Series, pd.Series]
-        X_train, X_test, y_train, y_test
-    """
+def create_train_test_split(X: pd.Series, y: pd.Series, test_size: float = 0.2, random_state: int = 1234, stratify: bool = True):
     if not 0 < test_size < 1:
         raise ValueError("test_size must be between 0 and 1")
-
     stratify_arg = y if stratify else None
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=stratify_arg
-    )
-
-    logger.info(
-        "Performed train/test split: train=%d rows, test=%d rows (test_size=%s, stratify=%s)",
-        len(X_train), len(X_test), test_size, stratify,
-    )
-
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state, stratify=stratify_arg)
+    logger.info("Train/test split: %d / %d", len(X_train), len(X_test))
     return X_train, X_test, y_train, y_test
 
 
 def main():
-    """Main entry point: load IMDB CSV, validate, save X/y and train/test splits, and plot distribution.
-
-    The function uses helper functions above and logs important steps/errors. It is
-    intentionally defensive: any exception is logged with a stack trace and re-raised
-    to aid debugging during development.
-    """
     try:
-        current_directory = os.getcwd()
-        logger.info("Current working directory: %s", current_directory)
+        cwd = os.getcwd()
+        data_dir = os.path.join(cwd, 'data')
+        data_path = os.path.join(data_dir, 'IMDBDataset.csv')
 
-        data_path = os.path.join(current_directory, 'data', 'IMDBDataset.csv')
+        df = load_csv_or_fail(data_path, expected_columns=['review', 'sentiment'])
 
-        # Load dataset with expected columns validation
-        data = load_csv_or_fail(data_path, expected_columns=['review', 'sentiment'])
+        X_raw = df['review']
+        y = df['sentiment'].map({'positive': 1, 'negative': 0})
 
-        # Basic checks and information
-        logger.info("Dataset columns: %s", list(data.columns))
-        logger.info("Missing values per column: %s", data.isnull().sum().to_dict())
+        # save raw
+        save_series(X_raw, os.path.join(data_dir, 'X_raw.csv'), column_name='review')
+        save_series(y, os.path.join(data_dir, 'y.csv'), column_name='sentiment')
 
-        # Features and labels
-        X = data['review']
-        y = data['sentiment'].map({'positive': 1, 'negative': 0})
-        logger.info("Mapped sentiment to binary labels. Unique labels after mapping: %s", sorted(y.unique()))
+        # clean
+        X = clean_text(X_raw, lower=True, remove_html=True, remove_urls=True, remove_emails=True, remove_punct=True, remove_numbers=False, min_word_length=3)
+        save_series(X, os.path.join(data_dir, 'X.csv'), column_name='review')
 
-        # Save raw X and y
-        save_series(X, os.path.join(current_directory, 'data', 'X.csv'), column_name='review')
-        save_series(y, os.path.join(current_directory, 'data', 'y.csv'), column_name='sentiment')
-
-        # Plot class distribution and save a copy
-        plot_class_distribution(y, show=True, save_path=os.path.join(current_directory, 'data', 'class_distribution.png'))
-
-        # Train/test split
+        # train/test
         X_train, X_test, y_train, y_test = create_train_test_split(X, y, test_size=0.2, random_state=42, stratify=True)
 
-        # Save splits
-        save_series(X_train, os.path.join(current_directory, 'data', 'X_train.csv'), column_name='review')
-        save_series(X_test, os.path.join(current_directory, 'data', 'X_test.csv'), column_name='review')
-        save_series(y_train, os.path.join(current_directory, 'data', 'y_train.csv'), column_name='sentiment')
-        save_series(y_test, os.path.join(current_directory, 'data', 'y_test.csv'), column_name='sentiment')
+        save_series(X_train, os.path.join(data_dir, 'X_train.csv'), column_name='review')
+        save_series(X_test, os.path.join(data_dir, 'X_test.csv'), column_name='review')
+        save_series(y_train, os.path.join(data_dir, 'y_train.csv'), column_name='sentiment')
+        save_series(y_test, os.path.join(data_dir, 'y_test.csv'), column_name='sentiment')
 
-        logger.info("Data preprocessing completed and files saved successfully.")
+        logger.info("Preprocessing finished successfully.")
 
-    except Exception as exc:
-        logger.exception("An error occurred in main(): %s", exc)
+    except Exception as e:
+        logger.exception("Error in main: %s", e)
         raise
 
 
 if __name__ == '__main__':
     main()
+
