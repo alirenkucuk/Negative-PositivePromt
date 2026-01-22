@@ -1,0 +1,16 @@
+# Data Manipulation & Processing
+pandas>=1.5.0
+numpy>=1.23.0
+spacy>=3.5.0
+
+# Classical Machine Learning
+scikit-learn>=1.2.0
+joblib>=1.2.0
+
+# Deep Learning Frameworks
+# Not: Bu kütüphaneler büyük boyutludur (Toplam ~2-3 GB)
+tensorflow>=2.12.0
+torch>=2.0.0
+
+# UI & Utilities
+rich>=13.0.0

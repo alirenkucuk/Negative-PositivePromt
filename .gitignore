@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Dataset and Generated Files
+data/*.csv
+data/*.xlsx
+# IMDBDataset.csv 66MB olduğu için GitHub'a yüklemek sınırda olabilir,
+# Genelde veri setleri repoya konmaz, indirme linki verilir.
+# Ama illa yükleyeceksen üstteki 'data/*.csv' satırını sil.
+# Profesyonel olan veriyi yüklememektir.
+
+# Models (Büyük modelleri yüklememek iyidir ama best_model.joblib küçükse kalabilir)
+models/*.h5
+models/*.pt
+
+# Logs
+artifacts/logs/
+*.log
+
+# System
+.DS_Store
