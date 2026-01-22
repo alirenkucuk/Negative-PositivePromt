@@ -46,22 +46,26 @@ The pipeline evaluated 5 different architectures on the IMDB Dataset (50K review
 ├── predict.py       # CLI Inference Script
 ├── app.py           # Web Application (Streamlit)
 └── requirements.txt # Dependencies
+```
 🛠️ Installation
 1. Clone the repository:
 
-Bash
+```
 git clone [https://github.com/alirenkucuk/Negative-PositivePromt.git](https://github.com/alirenkucuk/Negative-PositivePromt.git)
 cd Negative-PositivePromt
+```
 2. Create a clean environment (Recommended):
 
-Bash
+```
 conda create -n ai_env python=3.10 -y
 conda activate ai_env
+```
 3. Install dependencies:
 
-Bash
+```
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
+```
 4. Setup Data:
 
 The repository structure includes the data/ folder.
@@ -72,23 +76,27 @@ Ensure IMDBDataset.csv is present in data/ (Download from Kaggle if not included
 1. Data Processing
 Clean raw text and prepare training files (Train/Test split).
 
-Bash
+```
 python data_processor.py
+```
 2. Train All Frameworks
 Run the race between Sklearn, TF, and Torch. This will save the best model to models/.
 
-Bash
+```
 python trainer.py
+```
 3. Visual Interface (Web App)
 Launch the visualizer to see Heatmaps and LIME graphs.
 
-Bash
+```
 python -m streamlit run app.py
+```
 4. CLI Prediction
 Quick check from terminal without launching the UI.
 
-Bash
+```
 python predict.py --text "The cinematography was great but the plot was boring."
+```
 🧠 Visualization Preview
 Neural Activation Heatmap: See which words trigger the hidden neurons in the Deep Learning model.
 
